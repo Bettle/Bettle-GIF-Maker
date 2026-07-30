@@ -34,7 +34,7 @@
 
   // ---- drag & drop wiring ----
   dropZone.addEventListener("click", (e) => {
-    if (e.target.closest(".clear-frames")) return;
+    if (e.target.closest(".frame-list")) return;
     fileInput.click();
   });
   dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
@@ -58,13 +58,15 @@
         setStatus("No supported PDF/PNG/JPG files found");
         return;
       }
-      sources = loaded;
+      const isPdf = Array.from(fileList).some((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+      const withSelection = loaded.map((s) => ({ ...s, isSelected: true }));
+      sources = isPdf || sources.length === 0 ? withSelection : sources.concat(withSelection);
 
       outWidth.value = sources[0].nativeWidth;
       outHeight.value = sources[0].nativeHeight;
 
       await renderFrameList();
-      makeGifBtn.disabled = false;
+      updateMakeGifState();
       setStatus(`${sources.length} frame${sources.length > 1 ? "s" : ""} loaded — ready`);
     } catch (err) {
       console.error(err);
@@ -72,24 +74,39 @@
     }
   }
 
+  function selectedSources() {
+    return sources.filter((s) => s.isSelected);
+  }
+
+  function updateMakeGifState() {
+    makeGifBtn.disabled = selectedSources().length === 0;
+  }
+
   async function renderFrameList() {
     frameList.innerHTML = "";
     frameList.hidden = false;
     document.querySelector(".drop-content").style.display = "none";
 
-    for (const src of sources) {
-      const thumbUrl = await src.thumbnail(64);
-      const item = document.createElement("div");
-      item.className = "frame-item";
-      item.innerHTML = `<img src="${thumbUrl}" alt=""><span class="frame-name">${src.name}</span>`;
-      frameList.appendChild(item);
-    }
+    const header = document.createElement("div");
+    header.className = "frame-list-header";
+    header.innerHTML = `
+      <span class="frame-count">${sources.length} frame${sources.length > 1 ? "s" : ""}</span>
+      <div class="frame-list-actions">
+        <button type="button" class="icon-btn" id="addFramesBtn" title="Add frames" aria-label="Add frames">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        </button>
+        <button type="button" class="icon-btn" id="clearFramesBtn" title="Clear all" aria-label="Clear all frames">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+        </button>
+      </div>
+    `;
+    frameList.appendChild(header);
 
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.className = "clear-frames";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", (e) => {
+    header.querySelector("#addFramesBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    header.querySelector("#clearFramesBtn").addEventListener("click", (e) => {
       e.stopPropagation();
       sources = [];
       frameList.hidden = true;
@@ -98,7 +115,35 @@
       makeGifBtn.disabled = true;
       setStatus("Ready");
     });
-    frameList.appendChild(clearBtn);
+
+    const grid = document.createElement("div");
+    grid.className = "frame-grid";
+    frameList.appendChild(grid);
+
+    for (const src of sources) {
+      if (!src.thumbUrl) src.thumbUrl = await src.thumbnail(160);
+
+      const item = document.createElement("div");
+      item.className = "frame-item" + (src.isSelected ? " selected" : "");
+      item.innerHTML = `
+        <div class="frame-thumb-wrap">
+          <img src="${src.thumbUrl}" alt="">
+          <span class="frame-toggle">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <circle class="toggle-ring" cx="12" cy="12" r="10"/>
+              <path class="toggle-check" d="M7 12.5l3 3 7-7"/>
+            </svg>
+          </span>
+        </div>
+        <span class="frame-name">${src.name}</span>
+      `;
+      item.addEventListener("click", () => {
+        src.isSelected = !src.isSelected;
+        item.classList.toggle("selected", src.isSelected);
+        updateMakeGifState();
+      });
+      grid.appendChild(item);
+    }
   }
 
   // ---- settings display wiring ----
@@ -163,9 +208,10 @@
 
   // ---- Make GIF ----
   makeGifBtn.addEventListener("click", async () => {
-    if (sources.length === 0) return;
-    const width = Math.max(1, Math.round(Number(outWidth.value)) || sources[0].nativeWidth);
-    const height = Math.max(1, Math.round(Number(outHeight.value)) || sources[0].nativeHeight);
+    const selected = selectedSources();
+    if (selected.length === 0) return;
+    const width = Math.max(1, Math.round(Number(outWidth.value)) || selected[0].nativeWidth);
+    const height = Math.max(1, Math.round(Number(outHeight.value)) || selected[0].nativeHeight);
     const delayCentiseconds = Math.round(parseFloat(frameDelay.value) * 100);
     const loop = Number(loopCount.value);
     const mode = ditherMode.value;
@@ -177,14 +223,14 @@
     previewContent.style.display = "";
 
     try {
-      // 1. Rasterise every source at the target size (sequential — PDF.js
-      //    renders one page at a time against a single document).
+      // 1. Rasterise every selected source at the target size (sequential —
+      //    PDF.js renders one page at a time against a single document).
       setStatus("Rendering frames…");
       setProgress(0);
       const frames = [];
-      for (let i = 0; i < sources.length; i++) {
-        frames.push(await sources[i].render(width, height));
-        setProgress(((i + 1) / sources.length) * 25);
+      for (let i = 0; i < selected.length; i++) {
+        frames.push(await selected[i].render(width, height));
+        setProgress(((i + 1) / selected.length) * 25);
       }
 
       // 2. Build one shared palette (computed once, reused for every frame).
@@ -226,7 +272,7 @@
       setStatus(`Failed to build GIF: ${err.message || err}`);
       setProgress(null);
     } finally {
-      makeGifBtn.disabled = false;
+      updateMakeGifState();
     }
   });
 })();

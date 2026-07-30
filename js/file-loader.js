@@ -36,8 +36,9 @@
           ctx.drawImage(renderCanvas, 0, 0, renderCanvas.width, renderCanvas.height, 0, 0, w, h);
         }, renderCanvas.width, renderCanvas.height, outW, outH);
       },
-      async thumbnail(size) {
-        const data = await this.render(size, size);
+      async thumbnail(maxSize) {
+        const { w, h } = thumbDimensions(this.nativeWidth, this.nativeHeight, maxSize);
+        const data = await this.render(w, h);
         return imageDataToDataUrl(data);
       },
     };
@@ -53,10 +54,19 @@
           ctx.drawImage(img, 0, 0, w, h);
         }, img.naturalWidth || img.width, img.naturalHeight || img.height, outW, outH);
       },
-      async thumbnail(size) {
-        const data = await this.render(size, size);
+      async thumbnail(maxSize) {
+        const { w, h } = thumbDimensions(this.nativeWidth, this.nativeHeight, maxSize);
+        const data = await this.render(w, h);
         return imageDataToDataUrl(data);
       },
+    };
+  }
+
+  function thumbDimensions(nativeW, nativeH, maxSize) {
+    const scale = Math.min(maxSize / nativeW, maxSize / nativeH);
+    return {
+      w: Math.max(1, Math.round(nativeW * scale)),
+      h: Math.max(1, Math.round(nativeH * scale)),
     };
   }
 
