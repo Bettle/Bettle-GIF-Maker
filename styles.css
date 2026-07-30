@@ -31,16 +31,9 @@ html, body {
 }
 
 .logo {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .app-name {
