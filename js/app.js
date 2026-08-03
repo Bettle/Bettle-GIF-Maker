@@ -48,6 +48,15 @@
     return ((name || "gif-export").trim().replace(/\.gif$/i, "")) || "gif-export";
   }
 
+  function formatDuration(ms) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+
   function statusLabel(job) {
     switch (job.status) {
       case "pending": return "Pending";
@@ -590,7 +599,7 @@
       tile.innerHTML = `
         <div class="preview-tile-thumb">${job.status === "done" && job.result ? `<img src="${job.result.url}" alt="">` : ""}</div>
         <span class="preview-tile-name">${escapeHtml(job.settings.fileName)}</span>
-        <span class="preview-tile-status">${statusLabel(job)}</span>
+        <span class="preview-tile-status">${previewTileInfo(job)}</span>
         <button type="button" class="preview-tile-download" ${job.status === "done" ? "" : "disabled"}>Download GIF</button>
       `;
       tile.querySelector(".preview-tile-download").addEventListener("click", (e) => {
@@ -609,7 +618,7 @@
     const tile = previewGrid.querySelector(`[data-job-id="${job.id}"]`);
     if (!tile) return;
     tile.className = `preview-tile status-${job.status}` + (job.id === activeJobId ? " active" : "");
-    tile.querySelector(".preview-tile-status").textContent = statusLabel(job);
+    tile.querySelector(".preview-tile-status").textContent = previewTileInfo(job);
     const thumb = tile.querySelector(".preview-tile-thumb");
     const dl = tile.querySelector(".preview-tile-download");
     if (job.status === "done" && job.result) {
@@ -619,6 +628,10 @@
       thumb.innerHTML = "";
       dl.disabled = true;
     }
+  }
+
+  function previewTileInfo(job) {
+    return job.status === "done" && job.result ? formatFileSize(job.result.byteLength) : "";
   }
 
   function updatePreviewTileName(job) {
@@ -796,13 +809,14 @@
     makeGifBtn.disabled = true;
     makeSelectedBtn.disabled = true;
     makeGifBtn.textContent = "Processing…";
+    const startTime = performance.now();
 
     for (let i = 0; i < jobs.length; i++) {
       await processJob(jobs[i], i, jobs.length);
     }
 
     setProgress(null);
-    setStatus("Queue complete");
+    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}`);
     isProcessing = false;
     updateMakeGifState();
     updateMakeSelectedState();
@@ -816,11 +830,12 @@
     makeGifBtn.disabled = true;
     makeSelectedBtn.disabled = true;
     makeSelectedBtn.textContent = "Processing…";
+    const startTime = performance.now();
 
     await processJob(job, 0, 1);
 
     setProgress(null);
-    setStatus("Done");
+    setStatus(`Done — ${formatDuration(performance.now() - startTime)}`);
     makeSelectedBtn.textContent = "Make Selected GIF";
     isProcessing = false;
     updateMakeGifState();
