@@ -8,6 +8,7 @@
   --text-faint: #5f5f63;
   --accent: #e8491d;
   --accent-hover: #ff5a2b;
+  --error: #e5484d;
   --radius: 10px;
 }
 
@@ -22,7 +23,14 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .titlebar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -43,11 +51,12 @@ html, body {
 }
 
 .app {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1.1fr 1fr 1.1fr;
   gap: 16px;
   padding: 20px;
-  min-height: calc(100vh - 120px);
 }
 
 .panel {
@@ -56,6 +65,8 @@ html, body {
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Drop zone */
@@ -126,8 +137,10 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  cursor: pointer;
+  cursor: grab;
 }
+
+.frame-item.drag-over .frame-thumb-wrap { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .frame-thumb-wrap {
   position: relative;
@@ -173,6 +186,142 @@ html, body {
 }
 .frame-item.selected .frame-name { color: var(--text-dim); }
 
+/* Job queue */
+.job-queue {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  text-align: left;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.job-queue-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.job-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.job-queue-count { font-size: 12px; color: var(--text-dim); }
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  cursor: pointer;
+}
+
+.queue-row.active { border-color: var(--accent); background: #1c1712; }
+
+.queue-thumb {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #000;
+}
+
+.queue-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.queue-filename {
+  flex: 1;
+  min-width: 0;
+  background: #17171a;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 5px 7px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.queue-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 46px;
+  text-align: right;
+}
+
+.queue-row.status-error .queue-status { color: var(--error); }
+
+.queue-row .icon-btn { width: 22px; height: 22px; flex-shrink: 0; }
+.queue-row .icon-btn svg { width: 14px; height: 14px; }
+.queue-row .queue-download[disabled] { opacity: 0.35; pointer-events: none; }
+
+/* Job blocks: full frame grid per job, with a swatch to pick the active job */
+.job-blocks {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  text-align: left;
+}
+
+.job-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  cursor: pointer;
+}
+
+.job-block.active { border-color: var(--accent); }
+.job-block.drag-over { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.job-swatch {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: var(--border);
+  border: 1px solid var(--text-faint);
+  cursor: pointer;
+}
+
+.job-swatch.active { background: var(--accent); border-color: var(--accent); }
+
+.job-block-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.job-block-status { font-size: 12px; color: var(--text-dim); }
+.job-block-status.status-error { color: var(--error); }
+
 /* Settings */
 .settings { padding: 20px; gap: 18px; }
 
@@ -206,9 +355,33 @@ html, body {
 
 .inline-row .field-label { flex-shrink: 0; margin-right: auto; }
 
-.size-row input[type="number"] { width: 72px; }
+.size-row input[type="number"] { width: 72px; -moz-appearance: textfield; }
+.size-row input[type="number"]::-webkit-outer-spin-button,
+.size-row input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .size-x { color: var(--text-faint); }
 .size-unit { color: var(--text-faint); font-size: 12px; }
+
+.filename-list { display: flex; flex-direction: column; gap: 8px; }
+
+.filename-btn {
+  width: 100%;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.filename-btn:hover { border-color: var(--accent); }
 
 .dither-block { padding: 0; border: none; background: none; }
 .dither-block > .field-row { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
@@ -271,21 +444,122 @@ input[type="range"]::-webkit-slider-thumb {
 
 .primary-btn:not(:disabled):hover { background: var(--accent-hover); }
 
+.secondary-btn {
+  margin-top: auto;
+  background: none;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: not-allowed;
+  text-align: center;
+  display: block;
+  width: 100%;
+}
+
+.secondary-btn:not(:disabled) { color: var(--text); cursor: pointer; }
+.secondary-btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+
+/* The pair sits together at the bottom: the auto margin lives on the first
+   (secondary) button only, so the primary button just follows via gap. */
+.settings #makeGifBtn { margin-top: 0; }
+
 /* Preview */
 .preview { align-items: center; justify-content: center; padding: 20px; gap: 16px; }
 
-.preview-content { color: var(--text-faint); text-align: center; }
+.preview-empty { color: var(--text-faint); text-align: center; }
 .preview-icon { width: 40px; height: 40px; margin-bottom: 14px; }
 .preview-title { margin: 0; font-size: 14px; color: var(--text-dim); }
 
-#previewImg {
-  max-width: 100%;
-  max-height: 70%;
-  border-radius: 6px;
-  background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 50% / 16px 16px;
+.preview-grid {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  align-content: center;
+  overflow-y: auto;
 }
 
-#downloadBtn { width: 100%; }
+.preview-tile {
+  max-width: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  cursor: pointer;
+}
+
+.preview-tile.active { border-color: var(--accent); }
+
+.preview-tile-thumb {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border-radius: 6px;
+  background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 50% / 16px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.preview-tile-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+
+.preview-tile-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.preview-tile-status {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.preview-tile.status-error .preview-tile-status { color: var(--error); }
+
+.preview-tile-download {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.preview-tile-download:hover { background: var(--accent-hover); }
+.preview-tile-download[disabled] {
+  background: var(--panel);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.preview .primary-btn { margin-top: 16px; width: 100%; max-width: 440px; }
 
 /* Status bar */
 .statusbar {

@@ -28,7 +28,8 @@
         <p class="drop-title">Drop PDF, PNG, or JPG</p>
         <p class="drop-subtitle">or click to browse</p>
       </div>
-      <div class="frame-list" id="frameList" hidden></div>
+      <div class="job-queue" id="jobQueue" hidden></div>
+      <div class="job-blocks" id="jobBlocks" hidden></div>
     </section>
 
     <!-- Settings -->
@@ -85,16 +86,17 @@
       </div>
 
       <div class="field-block">
-        <label class="field-label" for="fileName">File name</label>
-        <input type="text" id="fileName" value="JOBXXXX_Project Name_v1a">
+        <label class="field-label">File names</label>
+        <div class="filename-list" id="filenameList"></div>
       </div>
 
+      <button id="makeSelectedBtn" class="secondary-btn" disabled>Make Selected GIF</button>
       <button id="makeGifBtn" class="primary-btn" disabled>Make GIF</button>
     </section>
 
     <!-- Preview -->
     <section class="panel preview">
-      <div class="preview-content" id="previewContent">
+      <div class="preview-empty" id="previewEmpty">
         <svg class="preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -102,8 +104,8 @@
         </svg>
         <p class="preview-title">GIF preview</p>
       </div>
-      <img id="previewImg" hidden>
-      <a id="downloadBtn" class="primary-btn" hidden download>Download GIF</a>
+      <div class="preview-grid" id="previewGrid" hidden></div>
+      <button type="button" id="downloadAllBtn" class="primary-btn" hidden disabled>Download All</button>
     </section>
 
   </main>
