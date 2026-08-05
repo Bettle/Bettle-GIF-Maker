@@ -5,6 +5,8 @@ Bettle GIF Maker
 Bettle GIF Maker — Feature List
 ================================
 
+*ADDED custom value option for loop amount
+
 INPUT & IMPORT
 - Drag-and-drop or click-to-browse file picker
 - Accepts PDF, PNG, and JPG/JPEG
