@@ -42,13 +42,17 @@
       </div>
 
       <div class="field-row">
-        <div class="field-block">
-          <label class="field-label center">Colour reduction</label>
-          <select id="colourReduction">
-            <option value="selective" selected>Selective</option>
-          </select>
+        <div class="field-block field-box">
+          <div class="field-row tight">
+            <div class="field-block">
+              <label class="field-label center">Colour reduction</label>
+              <select id="colourReduction">
+                <option value="selective" selected>Selective</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div class="field-block dither-block">
+        <div class="field-block field-box">
           <div class="field-row tight">
             <div class="field-block">
               <label class="field-label center">Dither</label>
@@ -60,7 +64,17 @@
             </div>
             <div class="field-block narrow">
               <label class="field-label center">Strength</label>
-              <input type="number" id="ditherStrength" min="0" max="100" step="1" value="100">
+              <div class="number-stepper">
+                <input type="number" id="ditherStrength" min="0" max="100" step="1" value="100">
+                <div class="number-stepper-arrows">
+                  <button type="button" class="stepper-arrow" id="ditherStrengthUp" tabindex="-1" aria-label="Increase strength">
+                    <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 5l4-4 4 4"/></svg>
+                  </button>
+                  <button type="button" class="stepper-arrow" id="ditherStrengthDown" tabindex="-1" aria-label="Decrease strength">
+                    <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

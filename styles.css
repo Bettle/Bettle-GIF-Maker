@@ -213,6 +213,9 @@ body {
 
 .job-queue-count { font-size: 12px; color: var(--text-dim); }
 
+.job-queue-header .icon-btn { width: 34px; height: 34px; }
+.job-queue-header .icon-btn svg { width: 22px; height: 22px; }
+
 .queue-list {
   display: flex;
   flex-direction: column;
@@ -366,25 +369,51 @@ body {
 
 .filename-list { display: flex; flex-direction: column; gap: 8px; }
 
-.filename-btn {
+.filename-input {
   width: 100%;
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.filename-input:hover { border-color: var(--accent); }
+
+.field-box { padding: 0; border: none; background: none; }
+.field-box > .field-row { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+
+.number-stepper { position: relative; display: flex; }
+.number-stepper input[type="number"] {
+  width: 100%;
+  padding-right: 26px;
+  -moz-appearance: textfield;
+}
+.number-stepper input[type="number"]::-webkit-outer-spin-button,
+.number-stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.number-stepper-arrows {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+.stepper-arrow {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-dim);
   cursor: pointer;
 }
-.filename-btn:hover { border-color: var(--accent); }
-
-.dither-block { padding: 0; border: none; background: none; }
-.dither-block > .field-row { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.stepper-arrow:hover { color: var(--text); }
+.stepper-arrow svg { width: 8px; height: 5px; }
+.stepper-arrow:first-child { border-bottom: 1px solid var(--border); }
 
 select, input[type="text"], input[type="number"] {
   background: var(--panel-alt);
@@ -487,7 +516,6 @@ input[type="range"]::-webkit-slider-thumb {
 
 .preview-tile {
   max-width: none;
-  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;

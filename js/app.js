@@ -10,6 +10,8 @@
   const colourReduction = document.getElementById("colourReduction");
   const ditherMode = document.getElementById("ditherMode");
   const ditherStrength = document.getElementById("ditherStrength");
+  const ditherStrengthUp = document.getElementById("ditherStrengthUp");
+  const ditherStrengthDown = document.getElementById("ditherStrengthDown");
   const loopCount = document.getElementById("loopCount");
   const outWidth = document.getElementById("outWidth");
   const outHeight = document.getElementById("outHeight");
@@ -67,54 +69,32 @@
     }
   }
 
-  // ---- save-to-disk (File System Access API, with plain-download fallback) ----
-  async function promptSaveLocation(job) {
-    if (!supportsFSAccess) return;
-    try {
-      job.saveHandle = await window.showSaveFilePicker({
-        suggestedName: `${sanitizeFileName(job.settings.fileName)}.gif`,
-        types: [{ description: "GIF image", accept: { "image/gif": [".gif"] } }],
-      });
-      setStatus(`Save location set for "${job.settings.fileName}"`);
-    } catch (err) {
-      if (err.name !== "AbortError") console.error(err);
-    }
-  }
-
-  function syncJobFileName(job) {
-    updateFileNameButton(job);
+  // ---- filename editing (inline text inputs, kept in sync across the queue list and settings panel) ----
+  function syncJobFileName(job, sourceEl) {
+    const listInput = filenameList.querySelector(`[data-job-id="${job.id}"]`);
+    if (listInput && listInput !== sourceEl && document.activeElement !== listInput) listInput.value = job.settings.fileName;
     const row = jobQueue.querySelector(`[data-job-id="${job.id}"] .queue-filename`);
-    if (row && document.activeElement !== row) row.value = job.settings.fileName;
+    if (row && row !== sourceEl && document.activeElement !== row) row.value = job.settings.fileName;
     updatePreviewTileName(job);
-  }
-
-  async function handleFilenameButtonClick(job) {
-    if (supportsFSAccess) {
-      await promptSaveLocation(job);
-      if (job.saveHandle) {
-        job.settings.fileName = sanitizeFileName(job.saveHandle.name);
-        syncJobFileName(job);
-      }
-    } else {
-      const newName = prompt("File name", job.settings.fileName);
-      if (newName !== null && newName.trim()) {
-        job.settings.fileName = newName.trim();
-        syncJobFileName(job);
-      }
-    }
   }
 
   async function downloadJob(job) {
     if (!job.result) return;
-    if (job.saveHandle) {
+    if (supportsFSAccess) {
       try {
-        const writable = await job.saveHandle.createWritable();
+        const handle = await window.showSaveFilePicker({
+          suggestedName: `${sanitizeFileName(job.settings.fileName)}.gif`,
+          types: [{ description: "GIF image", accept: { "image/gif": [".gif"] } }],
+        });
+        const writable = await handle.createWritable();
         await writable.write(job.result.blob);
         await writable.close();
         setStatus(`Saved "${sanitizeFileName(job.settings.fileName)}.gif"`);
       } catch (err) {
-        console.error(err);
-        setStatus(`Couldn't save file: ${err.message || err}`);
+        if (err.name !== "AbortError") {
+          console.error(err);
+          setStatus(`Couldn't save file: ${err.message || err}`);
+        }
       }
     } else {
       const a = document.createElement("a");
@@ -161,7 +141,6 @@
       status: "pending",
       error: null,
       result: null, // { url, blob, byteLength, frameCount }
-      saveHandle: null,
     };
   }
 
@@ -329,8 +308,7 @@
       const filenameInput = row.querySelector(".queue-filename");
       filenameInput.addEventListener("input", (e) => {
         job.settings.fileName = e.target.value;
-        updateFileNameButton(job);
-        updatePreviewTileName(job);
+        syncJobFileName(job, filenameInput);
       });
       row.querySelector(".queue-download").addEventListener("click", (e) => {
         e.stopPropagation();
@@ -363,11 +341,6 @@
     row.querySelector(".queue-status").textContent = statusLabel(job);
     const dl = row.querySelector(".queue-download");
     dl.disabled = job.status !== "done";
-  }
-
-  function updateFileNameButton(job) {
-    const btn = filenameList.querySelector(`[data-job-id="${job.id}"]`);
-    if (btn) btn.textContent = job.settings.fileName;
   }
 
   function clearAllJobs() {
@@ -407,17 +380,20 @@
     setStatus(jobs.length ? `${jobs.length} job${jobs.length > 1 ? "s" : ""} queued` : "Ready");
   }
 
-  // ---- settings-panel filename button list ----
+  // ---- settings-panel filename list (inline-editable) ----
   function renderFilenameList() {
     filenameList.innerHTML = "";
     for (const job of jobs) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "filename-btn";
-      btn.dataset.jobId = job.id;
-      btn.textContent = job.settings.fileName;
-      btn.addEventListener("click", () => handleFilenameButtonClick(job));
-      filenameList.appendChild(btn);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "filename-input";
+      input.dataset.jobId = job.id;
+      input.value = job.settings.fileName;
+      input.addEventListener("input", (e) => {
+        job.settings.fileName = e.target.value;
+        syncJobFileName(job, input);
+      });
+      filenameList.appendChild(input);
     }
   }
 
@@ -665,6 +641,12 @@
     const job = getActiveJob();
     if (job) job.settings.ditherStrength = v;
   });
+  function stepDitherStrength(delta) {
+    ditherStrength.value = Math.max(0, Math.min(100, (Number(ditherStrength.value) || 0) + delta));
+    ditherStrength.dispatchEvent(new Event("change"));
+  }
+  ditherStrengthUp.addEventListener("click", () => stepDitherStrength(1));
+  ditherStrengthDown.addEventListener("click", () => stepDitherStrength(-1));
   loopCount.addEventListener("change", () => {
     const job = getActiveJob();
     if (job) job.settings.loopCount = Number(loopCount.value);
