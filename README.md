@@ -1,3 +1,3 @@
 A work in progress auto gif maker
 
-<img width="1743" height="1078" alt="Screenshot 2026-07-30 at 2 58 59 PM" src="https://github.com/user-attachments/assets/8020e7f9-6ff0-4f27-9a09-22e2bc9b51fb" />
+<img width="2560" height="1392" alt="Screenshot 2026-08-03 152922" src="https://github.com/user-attachments/assets/b8b2c30e-657f-488a-a6d0-a257fc78802c" />
