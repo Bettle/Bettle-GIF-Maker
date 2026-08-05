@@ -367,6 +367,13 @@ body {
 .size-x { color: var(--text-faint); }
 .size-unit { color: var(--text-faint); font-size: 12px; }
 
+#loopCountCustom { width: 70px; -moz-appearance: textfield; }
+#loopCountCustom::-webkit-outer-spin-button,
+#loopCountCustom::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .filename-list { display: flex; flex-direction: column; gap: 8px; }
 
 .filename-input {

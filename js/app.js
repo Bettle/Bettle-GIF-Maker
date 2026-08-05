@@ -13,6 +13,7 @@
   const ditherStrengthUp = document.getElementById("ditherStrengthUp");
   const ditherStrengthDown = document.getElementById("ditherStrengthDown");
   const loopCount = document.getElementById("loopCount");
+  const loopCountCustom = document.getElementById("loopCountCustom");
   const outWidth = document.getElementById("outWidth");
   const outHeight = document.getElementById("outHeight");
   const makeSelectedBtn = document.getElementById("makeSelectedBtn");
@@ -228,6 +229,22 @@
     populateSettingsPanel(job);
   }
 
+  const loopCountPresets = Array.from(loopCount.options)
+    .map((o) => o.value)
+    .filter((v) => v !== "custom");
+
+  function setLoopCountUI(value) {
+    const str = String(value);
+    if (loopCountPresets.includes(str)) {
+      loopCount.value = str;
+      loopCountCustom.hidden = true;
+    } else {
+      loopCount.value = "custom";
+      loopCountCustom.hidden = false;
+      loopCountCustom.value = str;
+    }
+  }
+
   function populateSettingsPanel(job) {
     const s = job.settings;
     frameDelay.value = s.frameDelay;
@@ -235,7 +252,7 @@
     colourReduction.value = s.colourReduction;
     ditherMode.value = s.ditherMode;
     ditherStrength.value = s.ditherStrength;
-    loopCount.value = String(s.loopCount);
+    setLoopCountUI(s.loopCount);
     outWidth.value = s.outWidth;
     outHeight.value = s.outHeight;
   }
@@ -649,7 +666,23 @@
   ditherStrengthDown.addEventListener("click", () => stepDitherStrength(-1));
   loopCount.addEventListener("change", () => {
     const job = getActiveJob();
-    if (job) job.settings.loopCount = Number(loopCount.value);
+    if (loopCount.value === "custom") {
+      loopCountCustom.hidden = false;
+      const fallback = (job && job.settings.loopCount) || 1;
+      const v = Math.max(1, Math.min(65535, Number(loopCountCustom.value) || fallback));
+      loopCountCustom.value = v;
+      loopCountCustom.focus();
+      if (job) job.settings.loopCount = v;
+    } else {
+      loopCountCustom.hidden = true;
+      if (job) job.settings.loopCount = Number(loopCount.value);
+    }
+  });
+  loopCountCustom.addEventListener("change", () => {
+    const v = Math.max(1, Math.min(65535, Number(loopCountCustom.value) || 1));
+    loopCountCustom.value = v;
+    const job = getActiveJob();
+    if (job) job.settings.loopCount = v;
   });
   outWidth.addEventListener("change", () => {
     const job = getActiveJob();
