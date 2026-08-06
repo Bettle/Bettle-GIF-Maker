@@ -16,6 +16,7 @@
   const loopCountCustom = document.getElementById("loopCountCustom");
   const outWidth = document.getElementById("outWidth");
   const outHeight = document.getElementById("outHeight");
+  const compressionToggle = document.getElementById("compressionToggle");
   const makeSelectedBtn = document.getElementById("makeSelectedBtn");
   const makeGifBtn = document.getElementById("makeGifBtn");
 
@@ -59,6 +60,11 @@
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${(bytes / 1024).toFixed(0)} KB`;
   }
+
+  const MAX_GIF_BYTES = 150 * 1024;
+  const MAX_COMPRESSION_ATTEMPTS = 30;
+  const MIN_DIMENSION = 16;
+  const MIN_PALETTE = 4;
 
   function statusLabel(job) {
     switch (job.status) {
@@ -137,6 +143,7 @@
         loopCount: 3,
         outWidth: loadedSources[0].nativeWidth,
         outHeight: loadedSources[0].nativeHeight,
+        compressionEnabled: true,
         fileName: uniqueFileName(deriveDefaultFileName(loadedSources)),
       },
       status: "pending",
@@ -255,6 +262,7 @@
     setLoopCountUI(s.loopCount);
     outWidth.value = s.outWidth;
     outHeight.value = s.outHeight;
+    compressionToggle.checked = s.compressionEnabled;
   }
 
   // ---- compact queue-row list (top of left panel) ----
@@ -692,6 +700,10 @@
     const job = getActiveJob();
     if (job) job.settings.outHeight = Number(outHeight.value);
   });
+  compressionToggle.addEventListener("change", () => {
+    const job = getActiveJob();
+    if (job) job.settings.compressionEnabled = compressionToggle.checked;
+  });
 
   // ---- worker pool: parallel, batched frame dithering (per job) ----
   function ditherFramesInPool(frames, palette, mode, strength, onProgress) {
@@ -767,45 +779,80 @@
     }
 
     try {
-      const width = Math.max(1, Math.round(Number(job.settings.outWidth)) || selected[0].nativeWidth);
-      const height = Math.max(1, Math.round(Number(job.settings.outHeight)) || selected[0].nativeHeight);
+      let width = Math.max(1, Math.round(Number(job.settings.outWidth)) || selected[0].nativeWidth);
+      let height = Math.max(1, Math.round(Number(job.settings.outHeight)) || selected[0].nativeHeight);
       const delayCentiseconds = Math.round(parseFloat(job.settings.frameDelay) * 100);
       const loop = Number(job.settings.loopCount);
       const mode = job.settings.ditherMode;
-      const strength = Number(job.settings.ditherStrength);
+      let strength = Number(job.settings.ditherStrength);
+      let paletteSize = 256;
+      let frameSources = selected;
+      const compressionEnabled = job.settings.compressionEnabled !== false;
 
-      // 1. Rasterise every selected source at the target size.
-      setStatus(`Job ${jobIndex + 1} of ${totalJobs} — rendering frames…`);
-      setProgress(0);
-      const frames = [];
-      for (let i = 0; i < selected.length; i++) {
-        frames.push(await selected[i].render(width, height));
-        setProgress(((i + 1) / selected.length) * 25);
+      let frames, palette, indexedFrames, bytes;
+      let attempt = 1;
+      for (; ; attempt++) {
+        const shrinking = attempt > 1;
+        const label = shrinking ? ` (shrinking to fit ${formatFileSize(MAX_GIF_BYTES)}, attempt ${attempt})` : "";
+
+        // 1. Rasterise every source at the current target size.
+        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — rendering frames${label}…`);
+        setProgress(0);
+        frames = [];
+        for (let i = 0; i < frameSources.length; i++) {
+          frames.push(await frameSources[i].render(width, height));
+          setProgress(((i + 1) / frameSources.length) * 25);
+        }
+
+        // 2. Build one shared palette.
+        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — building colour palette${label}…`);
+        setProgress(30);
+        palette = Quantize.buildPalette(frames, paletteSize);
+
+        // 3. Dither + index each frame in parallel across a worker pool.
+        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (0/${frames.length})${label}…`);
+        indexedFrames = await ditherFramesInPool(frames, palette, mode, strength, (done, total) => {
+          setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (${done}/${total})${label}…`);
+          setProgress(35 + (done / total) * 55);
+        });
+
+        // 4. Encode the GIF.
+        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — encoding GIF${label}…`);
+        setProgress(95);
+        bytes = GifWriter.encode({
+          width, height, palette, frames: indexedFrames, delayCentiseconds, loopCount: loop,
+        });
+
+        if (!compressionEnabled || bytes.length <= MAX_GIF_BYTES || attempt >= MAX_COMPRESSION_ATTEMPTS) break;
+
+        // Still over budget — shrink for the next pass. Dimensions are the
+        // dominant lever (bytes scale ~linearly with pixel count), so scale
+        // them straight toward the target ratio; only fall back to a smaller
+        // palette, then no dithering, then fewer frames once we're already
+        // at the size floor and it still isn't enough.
+        const overRatio = bytes.length / MAX_GIF_BYTES;
+        if (width > MIN_DIMENSION || height > MIN_DIMENSION) {
+          const scale = Math.min(0.9, Math.max(0.5, 1 / Math.sqrt(overRatio)));
+          width = Math.max(MIN_DIMENSION, Math.round(width * scale));
+          height = Math.max(MIN_DIMENSION, Math.round(height * scale));
+        } else if (paletteSize > MIN_PALETTE) {
+          paletteSize = Math.max(MIN_PALETTE, Math.floor(paletteSize / 2));
+        } else if (strength > 0) {
+          strength = 0;
+        } else if (frameSources.length > 1) {
+          frameSources = frameSources.filter((_, i) => i % 2 === 0);
+        } else {
+          break;
+        }
       }
-
-      // 2. Build one shared palette.
-      setStatus(`Job ${jobIndex + 1} of ${totalJobs} — building colour palette…`);
-      setProgress(30);
-      const palette = Quantize.buildPalette(frames, 256);
-
-      // 3. Dither + index each frame in parallel across a worker pool.
-      setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (0/${frames.length})…`);
-      const indexedFrames = await ditherFramesInPool(frames, palette, mode, strength, (done, total) => {
-        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (${done}/${total})…`);
-        setProgress(35 + (done / total) * 55);
-      });
-
-      // 4. Encode the GIF.
-      setStatus(`Job ${jobIndex + 1} of ${totalJobs} — encoding GIF…`);
-      setProgress(95);
-      const bytes = GifWriter.encode({
-        width, height, palette, frames: indexedFrames, delayCentiseconds, loopCount: loop,
-      });
 
       if (job.result && job.result.url) URL.revokeObjectURL(job.result.url);
       const blob = new Blob([bytes], { type: "image/gif" });
       const url = URL.createObjectURL(blob);
-      job.result = { url, blob, byteLength: bytes.length, frameCount: frames.length };
+      job.result = {
+        url, blob, byteLength: bytes.length, frameCount: indexedFrames.length,
+        compressed: attempt > 1,
+      };
       job.status = "done";
       setProgress(100);
     } catch (err) {
@@ -830,8 +877,9 @@
       await processJob(jobs[i], i, jobs.length);
     }
 
+    const anyCompressed = jobs.some((j) => j.result && j.result.compressed);
     setProgress(null);
-    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}`);
+    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}${anyCompressed ? ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})` : ""}`);
     isProcessing = false;
     updateMakeGifState();
     updateMakeSelectedState();
@@ -850,7 +898,8 @@
     await processJob(job, 0, 1);
 
     setProgress(null);
-    setStatus(`Done — ${formatDuration(performance.now() - startTime)}`);
+    const compressedNote = job.result && job.result.compressed ? ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})` : "";
+    setStatus(`Done — ${formatDuration(performance.now() - startTime)}${compressedNote}`);
     makeSelectedBtn.textContent = "Make Selected GIF";
     isProcessing = false;
     updateMakeGifState();
