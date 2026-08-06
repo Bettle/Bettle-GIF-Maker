@@ -63,8 +63,13 @@
 
   const MAX_GIF_BYTES = 150 * 1024;
   const MAX_COMPRESSION_ATTEMPTS = 30;
-  const MIN_DIMENSION = 16;
   const MIN_PALETTE = 4;
+
+  function compressionStatusNote(overCap, compressed) {
+    if (overCap) return ` (still over ${formatFileSize(MAX_GIF_BYTES)} — colours reduced, size kept)`;
+    if (compressed) return ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})`;
+    return "";
+  }
 
   function statusLabel(job) {
     switch (job.status) {
@@ -779,30 +784,32 @@
     }
 
     try {
-      let width = Math.max(1, Math.round(Number(job.settings.outWidth)) || selected[0].nativeWidth);
-      let height = Math.max(1, Math.round(Number(job.settings.outHeight)) || selected[0].nativeHeight);
+      const width = Math.max(1, Math.round(Number(job.settings.outWidth)) || selected[0].nativeWidth);
+      const height = Math.max(1, Math.round(Number(job.settings.outHeight)) || selected[0].nativeHeight);
       const delayCentiseconds = Math.round(parseFloat(job.settings.frameDelay) * 100);
       const loop = Number(job.settings.loopCount);
       const mode = job.settings.ditherMode;
       let strength = Number(job.settings.ditherStrength);
       let paletteSize = 256;
-      let frameSources = selected;
       const compressionEnabled = job.settings.compressionEnabled !== false;
 
-      let frames, palette, indexedFrames, bytes;
+      // 1. Rasterise every selected source at the target size. Dimensions
+      // and frame count are fixed — output GIFs must match the requested
+      // size exactly (e.g. for client dispatch) — so only colour depth and
+      // dithering are available to trade away for a smaller file below.
+      setStatus(`Job ${jobIndex + 1} of ${totalJobs} — rendering frames…`);
+      setProgress(0);
+      const frames = [];
+      for (let i = 0; i < selected.length; i++) {
+        frames.push(await selected[i].render(width, height));
+        setProgress(((i + 1) / selected.length) * 25);
+      }
+
+      let palette, indexedFrames, bytes;
       let attempt = 1;
       for (; ; attempt++) {
         const shrinking = attempt > 1;
-        const label = shrinking ? ` (shrinking to fit ${formatFileSize(MAX_GIF_BYTES)}, attempt ${attempt})` : "";
-
-        // 1. Rasterise every source at the current target size.
-        setStatus(`Job ${jobIndex + 1} of ${totalJobs} — rendering frames${label}…`);
-        setProgress(0);
-        frames = [];
-        for (let i = 0; i < frameSources.length; i++) {
-          frames.push(await frameSources[i].render(width, height));
-          setProgress(((i + 1) / frameSources.length) * 25);
-        }
+        const label = shrinking ? ` (reducing colour to fit ${formatFileSize(MAX_GIF_BYTES)}, attempt ${attempt})` : "";
 
         // 2. Build one shared palette.
         setStatus(`Job ${jobIndex + 1} of ${totalJobs} — building colour palette${label}…`);
@@ -810,8 +817,12 @@
         palette = Quantize.buildPalette(frames, paletteSize);
 
         // 3. Dither + index each frame in parallel across a worker pool.
+        // ditherFramesInPool transfers each frame's buffer to its worker,
+        // detaching it — clone so a retry attempt still has pixel data to
+        // build the next palette from.
+        const frameCopies = frames.map((f) => ({ width: f.width, height: f.height, data: new Uint8ClampedArray(f.data) }));
         setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (0/${frames.length})${label}…`);
-        indexedFrames = await ditherFramesInPool(frames, palette, mode, strength, (done, total) => {
+        indexedFrames = await ditherFramesInPool(frameCopies, palette, mode, strength, (done, total) => {
           setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (${done}/${total})${label}…`);
           setProgress(35 + (done / total) * 55);
         });
@@ -825,22 +836,13 @@
 
         if (!compressionEnabled || bytes.length <= MAX_GIF_BYTES || attempt >= MAX_COMPRESSION_ATTEMPTS) break;
 
-        // Still over budget — shrink for the next pass. Dimensions are the
-        // dominant lever (bytes scale ~linearly with pixel count), so scale
-        // them straight toward the target ratio; only fall back to a smaller
-        // palette, then no dithering, then fewer frames once we're already
-        // at the size floor and it still isn't enough.
-        const overRatio = bytes.length / MAX_GIF_BYTES;
-        if (width > MIN_DIMENSION || height > MIN_DIMENSION) {
-          const scale = Math.min(0.9, Math.max(0.5, 1 / Math.sqrt(overRatio)));
-          width = Math.max(MIN_DIMENSION, Math.round(width * scale));
-          height = Math.max(MIN_DIMENSION, Math.round(height * scale));
-        } else if (paletteSize > MIN_PALETTE) {
+        // Still over budget — fewer colours first, then no dithering. Once
+        // both are maxed out there's nothing left to cut without touching
+        // size or frame count, so ship whatever this produced.
+        if (paletteSize > MIN_PALETTE) {
           paletteSize = Math.max(MIN_PALETTE, Math.floor(paletteSize / 2));
         } else if (strength > 0) {
           strength = 0;
-        } else if (frameSources.length > 1) {
-          frameSources = frameSources.filter((_, i) => i % 2 === 0);
         } else {
           break;
         }
@@ -852,6 +854,7 @@
       job.result = {
         url, blob, byteLength: bytes.length, frameCount: indexedFrames.length,
         compressed: attempt > 1,
+        overCap: compressionEnabled && bytes.length > MAX_GIF_BYTES,
       };
       job.status = "done";
       setProgress(100);
@@ -877,9 +880,10 @@
       await processJob(jobs[i], i, jobs.length);
     }
 
+    const anyOverCap = jobs.some((j) => j.result && j.result.overCap);
     const anyCompressed = jobs.some((j) => j.result && j.result.compressed);
     setProgress(null);
-    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}${anyCompressed ? ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})` : ""}`);
+    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}${compressionStatusNote(anyOverCap, anyCompressed)}`);
     isProcessing = false;
     updateMakeGifState();
     updateMakeSelectedState();
@@ -898,8 +902,8 @@
     await processJob(job, 0, 1);
 
     setProgress(null);
-    const compressedNote = job.result && job.result.compressed ? ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})` : "";
-    setStatus(`Done — ${formatDuration(performance.now() - startTime)}${compressedNote}`);
+    const note = job.result ? compressionStatusNote(job.result.overCap, job.result.compressed) : "";
+    setStatus(`Done — ${formatDuration(performance.now() - startTime)}${note}`);
     makeSelectedBtn.textContent = "Make Selected GIF";
     isProcessing = false;
     updateMakeGifState();
