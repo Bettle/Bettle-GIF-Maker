@@ -7,16 +7,17 @@
 
   const frameDelay = document.getElementById("frameDelay");
   const frameDelayValue = document.getElementById("frameDelayValue");
+  const frameDelayBlock = document.getElementById("frameDelayBlock");
+  const perFrameDelayToggle = document.getElementById("perFrameDelayToggle");
   const colourReduction = document.getElementById("colourReduction");
   const ditherMode = document.getElementById("ditherMode");
   const ditherStrength = document.getElementById("ditherStrength");
-  const ditherStrengthUp = document.getElementById("ditherStrengthUp");
-  const ditherStrengthDown = document.getElementById("ditherStrengthDown");
   const loopCount = document.getElementById("loopCount");
   const loopCountCustom = document.getElementById("loopCountCustom");
   const outWidth = document.getElementById("outWidth");
   const outHeight = document.getElementById("outHeight");
-  const compressionToggle = document.getElementById("compressionToggle");
+  const compressionLimitToggle = document.getElementById("compressionLimitToggle");
+  const compressionLimitInput = document.getElementById("compressionLimitKB");
   const makeSelectedBtn = document.getElementById("makeSelectedBtn");
   const makeGifBtn = document.getElementById("makeGifBtn");
 
@@ -61,13 +62,13 @@
     return `${(bytes / 1024).toFixed(0)} KB`;
   }
 
-  const MAX_GIF_BYTES = 150 * 1024;
+  const DEFAULT_COMPRESSION_LIMIT_KB = 150;
   const MAX_COMPRESSION_ATTEMPTS = 30;
   const MIN_PALETTE = 4;
 
-  function compressionStatusNote(overCap, compressed) {
-    if (overCap) return ` (still over ${formatFileSize(MAX_GIF_BYTES)} — colours reduced, size kept)`;
-    if (compressed) return ` (compressed to fit ${formatFileSize(MAX_GIF_BYTES)})`;
+  function compressionStatusNote(overCap, compressed, limitLabel) {
+    if (overCap) return ` (still over ${limitLabel} — colours reduced, size kept)`;
+    if (compressed) return ` (compressed to fit ${limitLabel})`;
     return "";
   }
 
@@ -142,13 +143,15 @@
       sources: loadedSources.map((s) => ({ ...s, isSelected: true })),
       settings: {
         frameDelay: 3.0,
+        perFrameDelay: false,
         colourReduction: "selective",
         ditherMode: "diffusion",
         ditherStrength: 100,
         loopCount: 3,
         outWidth: loadedSources[0].nativeWidth,
         outHeight: loadedSources[0].nativeHeight,
-        compressionEnabled: true,
+        compressionLimitEnabled: true,
+        compressionLimitKB: DEFAULT_COMPRESSION_LIMIT_KB,
         fileName: uniqueFileName(deriveDefaultFileName(loadedSources)),
       },
       status: "pending",
@@ -257,17 +260,25 @@
     }
   }
 
+  function setPerFrameDelayUI(enabled) {
+    frameDelayBlock.classList.toggle("collapsed", enabled);
+  }
+
   function populateSettingsPanel(job) {
     const s = job.settings;
     frameDelay.value = s.frameDelay;
     frameDelayValue.textContent = `${s.frameDelay.toFixed(1)}s`;
+    perFrameDelayToggle.checked = s.perFrameDelay;
+    setPerFrameDelayUI(s.perFrameDelay);
     colourReduction.value = s.colourReduction;
     ditherMode.value = s.ditherMode;
     ditherStrength.value = s.ditherStrength;
     setLoopCountUI(s.loopCount);
     outWidth.value = s.outWidth;
     outHeight.value = s.outHeight;
-    compressionToggle.checked = s.compressionEnabled;
+    compressionLimitToggle.checked = s.compressionLimitEnabled;
+    compressionLimitInput.value = s.compressionLimitKB;
+    compressionLimitInput.disabled = !s.compressionLimitEnabled;
   }
 
   // ---- compact queue-row list (top of left panel) ----
@@ -487,6 +498,7 @@
         const item = document.createElement("div");
         item.className = "frame-item" + (src.isSelected ? " selected" : "");
         item.draggable = true;
+        const delayValue = (src.customDelay != null ? src.customDelay : job.settings.frameDelay).toFixed(1);
         item.innerHTML = `
           <div class="frame-thumb-wrap">
             <img src="${src.thumbUrl}" alt="">
@@ -498,12 +510,27 @@
             </span>
           </div>
           <span class="frame-name">${src.name}</span>
+          ${job.settings.perFrameDelay ? `
+          <div class="frame-delay">
+            <input type="number" class="frame-delay-input" min="0.1" max="10" step="0.1" value="${delayValue}" draggable="false">
+            <span class="frame-delay-unit">s</span>
+          </div>` : ""}
         `;
         item.addEventListener("click", () => {
           src.isSelected = !src.isSelected;
           item.classList.toggle("selected", src.isSelected);
           updateMakeGifState();
         });
+        if (job.settings.perFrameDelay) {
+          const delayInput = item.querySelector(".frame-delay-input");
+          delayInput.addEventListener("mousedown", (e) => e.stopPropagation());
+          delayInput.addEventListener("click", (e) => e.stopPropagation());
+          delayInput.addEventListener("change", () => {
+            const v = Math.max(0.1, Math.min(10, parseFloat(delayInput.value) || job.settings.frameDelay));
+            delayInput.value = v.toFixed(1);
+            src.customDelay = v;
+          });
+        }
         item.addEventListener("dragstart", (e) => {
           e.stopPropagation();
           dragState = { type: "frame", jobId: job.id, fromIndex: job.sources.indexOf(src) };
@@ -657,6 +684,12 @@
     const job = getActiveJob();
     if (job) job.settings.frameDelay = parseFloat(frameDelay.value);
   });
+  perFrameDelayToggle.addEventListener("change", () => {
+    const job = getActiveJob();
+    if (job) job.settings.perFrameDelay = perFrameDelayToggle.checked;
+    setPerFrameDelayUI(perFrameDelayToggle.checked);
+    renderJobBlocks().catch((err) => console.error(err));
+  });
   colourReduction.addEventListener("change", () => {
     const job = getActiveJob();
     if (job) job.settings.colourReduction = colourReduction.value;
@@ -671,12 +704,6 @@
     const job = getActiveJob();
     if (job) job.settings.ditherStrength = v;
   });
-  function stepDitherStrength(delta) {
-    ditherStrength.value = Math.max(0, Math.min(100, (Number(ditherStrength.value) || 0) + delta));
-    ditherStrength.dispatchEvent(new Event("change"));
-  }
-  ditherStrengthUp.addEventListener("click", () => stepDitherStrength(1));
-  ditherStrengthDown.addEventListener("click", () => stepDitherStrength(-1));
   loopCount.addEventListener("change", () => {
     const job = getActiveJob();
     if (loopCount.value === "custom") {
@@ -705,9 +732,16 @@
     const job = getActiveJob();
     if (job) job.settings.outHeight = Number(outHeight.value);
   });
-  compressionToggle.addEventListener("change", () => {
+  compressionLimitToggle.addEventListener("change", () => {
     const job = getActiveJob();
-    if (job) job.settings.compressionEnabled = compressionToggle.checked;
+    compressionLimitInput.disabled = !compressionLimitToggle.checked;
+    if (job) job.settings.compressionLimitEnabled = compressionLimitToggle.checked;
+  });
+  compressionLimitInput.addEventListener("change", () => {
+    const v = Math.max(1, Math.round(Number(compressionLimitInput.value)) || DEFAULT_COMPRESSION_LIMIT_KB);
+    compressionLimitInput.value = v;
+    const job = getActiveJob();
+    if (job) job.settings.compressionLimitKB = v;
   });
 
   // ---- worker pool: parallel, batched frame dithering (per job) ----
@@ -786,12 +820,15 @@
     try {
       const width = Math.max(1, Math.round(Number(job.settings.outWidth)) || selected[0].nativeWidth);
       const height = Math.max(1, Math.round(Number(job.settings.outHeight)) || selected[0].nativeHeight);
-      const delayCentiseconds = Math.round(parseFloat(job.settings.frameDelay) * 100);
+      const delayCentiseconds = job.settings.perFrameDelay
+        ? selected.map((s) => Math.round((s.customDelay != null ? s.customDelay : job.settings.frameDelay) * 100))
+        : Math.round(parseFloat(job.settings.frameDelay) * 100);
       const loop = Number(job.settings.loopCount);
       const mode = job.settings.ditherMode;
       let strength = Number(job.settings.ditherStrength);
       let paletteSize = 256;
-      const compressionEnabled = job.settings.compressionEnabled !== false;
+      const limitKB = job.settings.compressionLimitEnabled !== false ? Number(job.settings.compressionLimitKB) || 0 : 0;
+      const maxBytes = limitKB > 0 ? limitKB * 1024 : Infinity;
 
       // 1. Rasterise every selected source at the target size. Dimensions
       // and frame count are fixed — output GIFs must match the requested
@@ -809,7 +846,7 @@
       let attempt = 1;
       for (; ; attempt++) {
         const shrinking = attempt > 1;
-        const label = shrinking ? ` (reducing colour to fit ${formatFileSize(MAX_GIF_BYTES)}, attempt ${attempt})` : "";
+        const label = shrinking ? ` (reducing colour to fit ${formatFileSize(maxBytes)}, attempt ${attempt})` : "";
 
         // 2. Build one shared palette.
         setStatus(`Job ${jobIndex + 1} of ${totalJobs} — building colour palette${label}…`);
@@ -834,7 +871,7 @@
           width, height, palette, frames: indexedFrames, delayCentiseconds, loopCount: loop,
         });
 
-        if (!compressionEnabled || bytes.length <= MAX_GIF_BYTES || attempt >= MAX_COMPRESSION_ATTEMPTS) break;
+        if (bytes.length <= maxBytes || attempt >= MAX_COMPRESSION_ATTEMPTS) break;
 
         // Still over budget — fewer colours first, then no dithering. Once
         // both are maxed out there's nothing left to cut without touching
@@ -854,7 +891,8 @@
       job.result = {
         url, blob, byteLength: bytes.length, frameCount: indexedFrames.length,
         compressed: attempt > 1,
-        overCap: compressionEnabled && bytes.length > MAX_GIF_BYTES,
+        overCap: bytes.length > maxBytes,
+        limitBytes: maxBytes,
       };
       job.status = "done";
       setProgress(100);
@@ -883,7 +921,7 @@
     const anyOverCap = jobs.some((j) => j.result && j.result.overCap);
     const anyCompressed = jobs.some((j) => j.result && j.result.compressed);
     setProgress(null);
-    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}${compressionStatusNote(anyOverCap, anyCompressed)}`);
+    setStatus(`Queue complete — ${formatDuration(performance.now() - startTime)}${compressionStatusNote(anyOverCap, anyCompressed, "the KB limit")}`);
     isProcessing = false;
     updateMakeGifState();
     updateMakeSelectedState();
@@ -902,7 +940,7 @@
     await processJob(job, 0, 1);
 
     setProgress(null);
-    const note = job.result ? compressionStatusNote(job.result.overCap, job.result.compressed) : "";
+    const note = job.result ? compressionStatusNote(job.result.overCap, job.result.compressed, formatFileSize(job.result.limitBytes)) : "";
     setStatus(`Done — ${formatDuration(performance.now() - startTime)}${note}`);
     makeSelectedBtn.textContent = "Make Selected GIF";
     isProcessing = false;

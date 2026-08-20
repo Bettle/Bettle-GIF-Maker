@@ -98,9 +98,10 @@
   }
 
   // opts: { width, height, palette: Uint8Array(n*3), frames: [Uint8Array indices],
-  //         delayCentiseconds, loopCount (0 = infinite) }
+  //         delayCentiseconds (number, or one per frame), loopCount (0 = infinite) }
   function encode(opts) {
     const { width, height, palette, frames, delayCentiseconds, loopCount } = opts;
+    const delays = Array.isArray(delayCentiseconds) ? delayCentiseconds : frames.map(() => delayCentiseconds);
     const w = new ByteWriter();
 
     const numColors = Math.max(2, palette.length / 3);
@@ -127,11 +128,12 @@
 
     const minCodeSize = Math.max(2, tableBits);
 
-    for (const indices of frames) {
+    for (let i = 0; i < frames.length; i++) {
+      const indices = frames[i];
       // Graphic Control Extension
       w.push(0x21, 0xf9, 0x04);
       w.push(0x04); // disposal method 1 (do not dispose), no transparency
-      w.pushArray(le16(delayCentiseconds));
+      w.pushArray(le16(delays[i]));
       w.push(0x00); // transparent colour index (unused)
       w.push(0x00);
 

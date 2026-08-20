@@ -344,9 +344,22 @@ body {
   color: var(--text-dim);
 }
 
-.field-row { display: flex; gap: 10px; }
+.field-row { display: flex; gap: 10px; min-width: 0; }
 .field-row.tight { gap: 8px; }
-.field-row > .field-block { flex: 1; }
+.field-row > .field-block { flex: 1; min-width: 0; }
+.field-row > .field-block.narrow { flex: 0 0 68px; }
+
+/* Dither/Compression needs more room for its option text than Loop/Size
+   does, so this pair uses grid with an uneven ratio instead of an even
+   flex split; minmax(0, ...) still lets both shrink instead of overflowing. */
+.field-row.boxes {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+.field-row.boxes > .field-box { min-width: 0; }
+.field-row.boxes .inline-row { gap: 4px; }
+.field-row.boxes .size-row input[type="number"] { width: 36px; padding-left: 4px; padding-right: 4px; }
+.field-row.boxes .size-unit { display: none; }
 
 .inline-row {
   align-items: center;
@@ -357,6 +370,7 @@ body {
 }
 
 .inline-row .field-label { flex-shrink: 0; margin-right: auto; }
+.inline-row select, .inline-row input[type="number"] { min-width: 0; }
 
 .size-row input[type="number"] { width: 72px; -moz-appearance: textfield; }
 .size-row input[type="number"]::-webkit-outer-spin-button,
@@ -383,44 +397,36 @@ body {
 }
 .filename-input:hover { border-color: var(--accent); }
 
-.field-box { padding: 0; border: none; background: none; }
-.field-box > .field-row { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
-
-.number-stepper { position: relative; display: flex; }
-.number-stepper input[type="number"] {
-  width: 100%;
-  padding-right: 26px;
-  -moz-appearance: textfield;
+.field-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
 }
-.number-stepper input[type="number"]::-webkit-outer-spin-button,
-.number-stepper input[type="number"]::-webkit-inner-spin-button {
+.field-box > .field-row { background: none; border: none; padding: 0; }
+
+.centered-number { text-align: center; -moz-appearance: textfield; }
+.centered-number::-webkit-outer-spin-button,
+.centered-number::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.number-stepper-arrows {
-  position: absolute;
-  right: 1px;
-  top: 1px;
-  bottom: 1px;
-  width: 22px;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border);
+
+.frame-delay-block {
+  overflow: hidden;
+  max-height: 100px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
 }
-.stepper-arrow {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-dim);
-  cursor: pointer;
+.frame-delay-block.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: -18px;
+  pointer-events: none;
 }
-.stepper-arrow:hover { color: var(--text); }
-.stepper-arrow svg { width: 8px; height: 5px; }
-.stepper-arrow:first-child { border-bottom: 1px solid var(--border); }
 
 select, input[type="text"], input[type="number"] {
   background: var(--panel-alt);
@@ -432,19 +438,43 @@ select, input[type="text"], input[type="number"] {
   font-family: inherit;
 }
 
-.field-row.tight select, .field-row.tight input { background: #17171a; }
-
-.settings > .field-row > .field-block > select { width: 100%; }
+.field-row.tight select, .field-row.tight input { background: #17171a; width: 100%; }
 
 .inline-row select, .inline-row input[type="number"] { margin-left: 8px; }
 
-#compressionToggle {
+.settings-checkbox {
   margin-left: 8px;
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+#compressionLimitKB {
+  width: 70px;
+  -moz-appearance: textfield;
+}
+#compressionLimitKB::-webkit-outer-spin-button,
+#compressionLimitKB::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#compressionLimitKB:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.frame-delay { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.frame-delay-input {
+  width: 44px;
+  padding: 3px 4px;
+  font-size: 11px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+.frame-delay-input::-webkit-outer-spin-button,
+.frame-delay-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.frame-delay-unit { font-size: 11px; color: var(--text-faint); }
 
 input[type="range"] {
   -webkit-appearance: none;

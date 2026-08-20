@@ -35,27 +35,22 @@
     <!-- Settings -->
     <section class="panel settings">
 
-      <div class="field-block">
+      <div class="field-block frame-delay-block" id="frameDelayBlock">
         <label class="field-label center">Time between frames</label>
         <input type="range" id="frameDelay" min="0.1" max="10" step="0.1" value="3.0">
         <div class="field-value" id="frameDelayValue">3.0s</div>
       </div>
 
-      <div class="field-row">
+      <div class="field-row inline-row">
+        <label class="field-label" for="perFrameDelayToggle">Per-frame timing</label>
+        <input type="checkbox" id="perFrameDelayToggle" class="settings-checkbox">
+      </div>
+
+      <div class="field-row boxes">
         <div class="field-block field-box">
           <div class="field-row tight">
             <div class="field-block">
-              <label class="field-label center">Colour reduction</label>
-              <select id="colourReduction">
-                <option value="selective" selected>Selective</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="field-block field-box">
-          <div class="field-row tight">
-            <div class="field-block">
-              <label class="field-label center">Dither</label>
+              <label class="field-label center">Compression</label>
               <select id="ditherMode">
                 <option value="diffusion" selected>Diffusion</option>
                 <option value="atkinson">Atkinson</option>
@@ -63,47 +58,45 @@
               </select>
             </div>
             <div class="field-block narrow">
-              <label class="field-label center">Strength</label>
-              <div class="number-stepper">
-                <input type="number" id="ditherStrength" min="0" max="100" step="1" value="100">
-                <div class="number-stepper-arrows">
-                  <button type="button" class="stepper-arrow" id="ditherStrengthUp" tabindex="-1" aria-label="Increase strength">
-                    <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 5l4-4 4 4"/></svg>
-                  </button>
-                  <button type="button" class="stepper-arrow" id="ditherStrengthDown" tabindex="-1" aria-label="Decrease strength">
-                    <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
-                  </button>
-                </div>
-              </div>
+              <label class="field-label center">Dither</label>
+              <input type="number" id="ditherStrength" min="0" max="100" step="1" value="100" class="centered-number">
             </div>
+          </div>
+          <div class="field-row tight">
+            <div class="field-block">
+              <select id="colourReduction">
+                <option value="selective" selected>Selective</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="field-block field-box">
+          <div class="field-row inline-row">
+            <label class="field-label" for="loopCount">Loop</label>
+            <select id="loopCount">
+              <option value="0">Forever</option>
+              <option value="1">Once</option>
+              <option value="3" selected>3 times</option>
+              <option value="5">5 times</option>
+              <option value="10">10 times</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <input type="number" id="loopCountCustom" min="1" max="65535" step="1" placeholder="Times" hidden>
+          </div>
+          <div class="field-row inline-row size-row">
+            <label class="field-label">Size</label>
+            <input type="number" id="outWidth" min="1" step="1" placeholder="W">
+            <span class="size-x">&times;</span>
+            <input type="number" id="outHeight" min="1" step="1" placeholder="H">
+            <span class="size-unit">px</span>
           </div>
         </div>
       </div>
 
       <div class="field-row inline-row">
-        <label class="field-label" for="loopCount">Loop</label>
-        <select id="loopCount">
-          <option value="0">Forever</option>
-          <option value="1">Once</option>
-          <option value="3" selected>3 times</option>
-          <option value="5">5 times</option>
-          <option value="10">10 times</option>
-          <option value="custom">Custom…</option>
-        </select>
-        <input type="number" id="loopCountCustom" min="1" max="65535" step="1" placeholder="Times" hidden>
-      </div>
-
-      <div class="field-row inline-row size-row">
-        <label class="field-label">Size</label>
-        <input type="number" id="outWidth" min="1" step="1" placeholder="Width">
-        <span class="size-x">&times;</span>
-        <input type="number" id="outHeight" min="1" step="1" placeholder="Height">
-        <span class="size-unit">px</span>
-      </div>
-
-      <div class="field-row inline-row">
-        <label class="field-label" for="compressionToggle">Limit to 150 KB</label>
-        <input type="checkbox" id="compressionToggle" checked>
+        <label class="field-label" for="compressionLimitKB">Limit KB</label>
+        <input type="checkbox" id="compressionLimitToggle" class="settings-checkbox" checked>
+        <input type="number" id="compressionLimitKB" min="1" step="1" value="150" class="centered-number">
       </div>
 
       <div class="field-block">
