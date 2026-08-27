@@ -29,6 +29,40 @@
   const progressTrack = document.getElementById("progressTrack");
   const progressFill = document.getElementById("progressFill");
 
+  // ---- easter egg: double-click the logo to cycle the accent colour ----
+  const ACCENT_COLORS = [
+    { accent: "#e8491d", hover: "#ff5a2b" }, // default (orange)
+    { accent: "#85c9e5", hover: "#97d1e9" },
+    { accent: "#382a7c", hover: "#564a90" },
+    { accent: "#f3ccd7", hover: "#f5d4dd" },
+    { accent: "#9dd29c", hover: "#acd9ab" },
+    { accent: "#286158", hover: "#487971" },
+  ];
+  const ACCENT_STORAGE_KEY = "bettleAccentIndex";
+
+  function applyAccentColor(index) {
+    const c = ACCENT_COLORS[index % ACCENT_COLORS.length];
+    document.documentElement.style.setProperty("--accent", c.accent);
+    document.documentElement.style.setProperty("--accent-hover", c.hover);
+  }
+
+  let accentIndex = 0;
+  try {
+    accentIndex = Number(localStorage.getItem(ACCENT_STORAGE_KEY)) || 0;
+  } catch (err) { /* localStorage unavailable (e.g. private browsing) — stay on default */ }
+  applyAccentColor(accentIndex);
+
+  const logoEl = document.querySelector(".logo");
+  if (logoEl) {
+    logoEl.addEventListener("dblclick", () => {
+      accentIndex = (accentIndex + 1) % ACCENT_COLORS.length;
+      applyAccentColor(accentIndex);
+      try {
+        localStorage.setItem(ACCENT_STORAGE_KEY, String(accentIndex));
+      } catch (err) { /* non-essential — ignore persistence failures */ }
+    });
+  }
+
   let jobs = [];
   let activeJobId = null;
   let jobCounter = 0;
