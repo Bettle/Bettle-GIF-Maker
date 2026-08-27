@@ -6,6 +6,21 @@ Bettle GIF Maker — Feature List
 ================================
 
 *ADDED custom value option for loop amount
+*ADDED 
+DITHER ALGORITHM
+- None — no dithering. Selecting this sets the Dither (strength) field to 0.
+- Diffusion
+- Pattern
+- Noise
+Note: switching to Diffusion, Pattern, or Noise automatically sets the
+Dither (strength) field to 100; switching to None sets it to 0.
+
+COLOUR REDUCTION
+- Selective
+- Perceptual
+- Adaptive
+- Restrictive (Web) — uses the fixed 216-colour "web-safe" palette instead
+  of building one from the image.
 
 INPUT & IMPORT
 - Drag-and-drop or click-to-browse file picker
