@@ -697,6 +697,9 @@
   ditherMode.addEventListener("change", () => {
     const job = getActiveJob();
     if (job) job.settings.ditherMode = ditherMode.value;
+    const strengthValue = ditherMode.value === "none" ? 0 : 100;
+    ditherStrength.value = strengthValue;
+    if (job) job.settings.ditherStrength = strengthValue;
   });
   ditherStrength.addEventListener("change", () => {
     const v = Math.max(0, Math.min(100, Number(ditherStrength.value) || 0));
@@ -745,7 +748,7 @@
   });
 
   // ---- worker pool: parallel, batched frame dithering (per job) ----
-  function ditherFramesInPool(frames, palette, mode, strength, onProgress) {
+  function ditherFramesInPool(frames, palette, mode, strength, colourReduction, onProgress) {
     return new Promise((resolve, reject) => {
       if (frames.length === 0) { resolve([]); return; }
 
@@ -769,6 +772,7 @@
           palette,
           ditherMode: mode,
           ditherStrength: strength,
+          colourReduction,
         }, [frame.data.buffer]);
       }
 
@@ -827,6 +831,7 @@
       const mode = job.settings.ditherMode;
       let strength = Number(job.settings.ditherStrength);
       let paletteSize = 256;
+      const colourAlgorithm = job.settings.colourReduction || "selective";
       const limitKB = job.settings.compressionLimitEnabled !== false ? Number(job.settings.compressionLimitKB) || 0 : 0;
       const maxBytes = limitKB > 0 ? limitKB * 1024 : Infinity;
 
@@ -851,7 +856,9 @@
         // 2. Build one shared palette.
         setStatus(`Job ${jobIndex + 1} of ${totalJobs} — building colour palette${label}…`);
         setProgress(30);
-        palette = Quantize.buildPalette(frames, paletteSize);
+        palette = colourAlgorithm === "restrictive"
+          ? Quantize.buildWebSafePalette()
+          : Quantize.buildPalette(frames, paletteSize, colourAlgorithm);
 
         // 3. Dither + index each frame in parallel across a worker pool.
         // ditherFramesInPool transfers each frame's buffer to its worker,
@@ -859,7 +866,7 @@
         // build the next palette from.
         const frameCopies = frames.map((f) => ({ width: f.width, height: f.height, data: new Uint8ClampedArray(f.data) }));
         setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (0/${frames.length})${label}…`);
-        indexedFrames = await ditherFramesInPool(frameCopies, palette, mode, strength, (done, total) => {
+        indexedFrames = await ditherFramesInPool(frameCopies, palette, mode, strength, colourAlgorithm, (done, total) => {
           setStatus(`Job ${jobIndex + 1} of ${totalJobs} — dithering frames (${done}/${total})${label}…`);
           setProgress(35 + (done / total) * 55);
         });
@@ -875,8 +882,10 @@
 
         // Still over budget — fewer colours first, then no dithering. Once
         // both are maxed out there's nothing left to cut without touching
-        // size or frame count, so ship whatever this produced.
-        if (paletteSize > MIN_PALETTE) {
+        // size or frame count, so ship whatever this produced. Restrictive
+        // is a fixed 216-colour palette that doesn't shrink, so skip
+        // straight past the palette-size lever for it.
+        if (colourAlgorithm !== "restrictive" && paletteSize > MIN_PALETTE) {
           paletteSize = Math.max(MIN_PALETTE, Math.floor(paletteSize / 2));
         } else if (strength > 0) {
           strength = 0;

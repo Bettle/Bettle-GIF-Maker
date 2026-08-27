@@ -52,9 +52,10 @@
             <div class="field-block">
               <label class="field-label center">Compression</label>
               <select id="ditherMode">
-                <option value="diffusion" selected>Diffusion</option>
-                <option value="atkinson">Atkinson</option>
                 <option value="none">None</option>
+                <option value="diffusion" selected>Diffusion</option>
+                <option value="pattern">Pattern</option>
+                <option value="noise">Noise</option>
               </select>
             </div>
             <div class="field-block narrow">
@@ -65,7 +66,10 @@
           <div class="field-row tight">
             <div class="field-block">
               <select id="colourReduction">
+                <option value="perceptual">Perceptual</option>
                 <option value="selective" selected>Selective</option>
+                <option value="adaptive">Adaptive</option>
+                <option value="restrictive">Restrictive (Web)</option>
               </select>
             </div>
           </div>

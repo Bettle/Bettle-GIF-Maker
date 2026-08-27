@@ -25,26 +25,29 @@
     return samples;
   }
 
-  function boxRange(points) {
+  function boxRange(points, weights) {
     let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
     for (const [r, g, b] of points) {
       if (r < rMin) rMin = r; if (r > rMax) rMax = r;
       if (g < gMin) gMin = g; if (g > gMax) gMax = g;
       if (b < bMin) bMin = b; if (b > bMax) bMax = b;
     }
-    const rRange = rMax - rMin, gRange = gMax - gMin, bRange = bMax - bMin;
-    let channel = 0, range = rRange;
-    if (gRange > range) { channel = 1; range = gRange; }
-    if (bRange > range) { channel = 2; range = bRange; }
+    const ranges = [(rMax - rMin) * weights[0], (gMax - gMin) * weights[1], (bMax - bMin) * weights[2]];
+    let channel = 0, range = ranges[0];
+    if (ranges[1] > range) { channel = 1; range = ranges[1]; }
+    if (ranges[2] > range) { channel = 2; range = ranges[2]; }
     return { channel, range };
   }
 
-  function splitBox(points) {
-    const { channel } = boxRange(points);
+  function splitBox(points, weights) {
+    const { channel } = boxRange(points, weights);
     points.sort((a, b) => a[channel] - b[channel]);
     const mid = Math.floor(points.length / 2);
     return [points.slice(0, mid), points.slice(mid)];
   }
+
+  const PERCEPTUAL_WEIGHTS = [0.299, 0.587, 0.114];
+  const EQUAL_WEIGHTS = [1, 1, 1];
 
   function averageColor(points) {
     let r = 0, g = 0, b = 0;
@@ -53,9 +56,13 @@
     return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
   }
 
-  // Returns a Uint8Array of length paletteSize*3 (RGB triples).
-  function buildPalette(frames, maxColors) {
+  // algorithm: "selective" (default, unweighted) | "perceptual" (weighted
+  // toward luma-sensitive channels) | "adaptive" (weighted toward populous
+  // colour regions). Returns a Uint8Array of length paletteSize*3 (RGB triples).
+  function buildPalette(frames, maxColors, algorithm) {
     maxColors = Math.max(2, Math.min(256, maxColors || 256));
+    const weights = algorithm === "perceptual" ? PERCEPTUAL_WEIGHTS : EQUAL_WEIGHTS;
+    const adaptive = algorithm === "adaptive";
 
     const samples = collectSamples(frames);
     if (samples.length === 0) {
@@ -78,16 +85,19 @@
 
     let boxes = [samples];
     while (boxes.length < maxColors) {
-      // Split the box with the largest colour range (most visually significant).
-      let splitIndex = -1, bestRange = -1;
+      // Split the box with the largest (weighted) colour range — or, for
+      // "adaptive", the largest range-times-population — most visually
+      // significant / most populous box wins.
+      let splitIndex = -1, bestScore = -1;
       for (let i = 0; i < boxes.length; i++) {
         if (boxes[i].length < 2) continue;
-        const { range } = boxRange(boxes[i]);
-        if (range > bestRange) { bestRange = range; splitIndex = i; }
+        const { range } = boxRange(boxes[i], weights);
+        const score = adaptive ? range * boxes[i].length : range;
+        if (score > bestScore) { bestScore = score; splitIndex = i; }
       }
       if (splitIndex === -1) break; // nothing left worth splitting
 
-      const [a, b] = splitBox(boxes[splitIndex]);
+      const [a, b] = splitBox(boxes[splitIndex], weights);
       boxes.splice(splitIndex, 1, a, b);
     }
 
@@ -101,20 +111,42 @@
     return palette;
   }
 
-  function nearestColorIndex(palette, r, g, b) {
+  // Fixed 216-colour "web-safe" palette (6x6x6 grid), not derived from image data.
+  function buildWebSafePalette() {
+    const steps = [0, 51, 102, 153, 204, 255];
+    const palette = new Uint8Array(216 * 3);
+    let i = 0;
+    for (const r of steps) {
+      for (const g of steps) {
+        for (const b of steps) {
+          palette[i++] = r;
+          palette[i++] = g;
+          palette[i++] = b;
+        }
+      }
+    }
+    return palette;
+  }
+
+  // wr/wg/wb let callers bias the distance metric (e.g. luma weights for a
+  // perceptually-built palette); default to 1 for plain Euclidean distance.
+  function nearestColorIndex(palette, r, g, b, wr, wg, wb) {
+    wr = wr == null ? 1 : wr;
+    wg = wg == null ? 1 : wg;
+    wb = wb == null ? 1 : wb;
     let best = 0, bestDist = Infinity;
     const n = palette.length / 3;
     for (let i = 0; i < n; i++) {
       const dr = palette[i * 3] - r;
       const dg = palette[i * 3 + 1] - g;
       const db = palette[i * 3 + 2] - b;
-      const dist = dr * dr + dg * dg + db * db;
+      const dist = wr * dr * dr + wg * dg * dg + wb * db * db;
       if (dist < bestDist) { bestDist = dist; best = i; }
     }
     return best;
   }
 
-  const api = { buildPalette, nearestColorIndex };
+  const api = { buildPalette, buildWebSafePalette, nearestColorIndex };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else global.Quantize = api;
 })(typeof self !== "undefined" ? self : this);
